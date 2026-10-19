@@ -1,0 +1,41 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Запускается при пуше тега, начинающегося с v (например, v1.0.0)
+
+permissions:
+  contents: write # Обязательно для создания релиза и загрузки файлов
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Критически важно для MinVer, чтобы он видел все теги
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish application
+        # Все флаги (single-file, self-contained и т.д.) уже в .csproj
+        run: dotnet publish -c Release -o publish
+
+      - name: Prepare binary archive
+        shell: pwsh
+        run: |
+          # Упаковываем готовую сборку (exe + папка locales) в zip
+          Compress-Archive -Path "publish/*" -DestinationPath "EU4FLO-${{ github.ref_name }}-win-x64.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            EU4FLO-${{ github.ref_name }}-win-x64.zip
+          generate_release_notes: true
