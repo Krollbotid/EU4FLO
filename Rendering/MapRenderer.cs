@@ -16,7 +16,27 @@ public sealed class MapRenderer
         _width = bmp.Width;
         _height = bmp.Height;
         _provincePixels = new uint[_width * _height];
-        _colorToProvinceId = provinces.ToDictionary(p => p.Packed, p => p.Id);
+        _colorToProvinceId = new Dictionary<uint, int>();
+        foreach (var p in provinces)
+        {
+            // Если такой цвет уже есть — пропускаем дубликат.
+            // Для отладки можно добавить: Console.WriteLine($"Duplicate color {p.Packed}: ID {p.Id} conflicts with {_colorToProvinceId[p.Packed]}");
+            if (!_colorToProvinceId.ContainsKey(p.Packed))
+            {
+                _colorToProvinceId[p.Packed] = p.Id;
+            }
+        }
+        var duplicates = provinces
+            .GroupBy(p => p.Packed)
+            .Where(g => g.Count() > 1)
+            .Select(g => new { Color = g.Key, Ids = g.Select(p => p.Id).ToList() })
+            .ToList();
+
+        foreach (var dup in duplicates)
+        {
+            // Здесь можно вывести предупреждение или записать в лог
+            MessageBox.Show($"Дублирующийся цвет {dup.Color} у провинций: {string.Join(", ", dup.Ids)}");
+        }
 
         var rect = new Rectangle(0, 0, _width, _height);
         var data = bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
