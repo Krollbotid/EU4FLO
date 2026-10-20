@@ -1,5 +1,10 @@
-namespace EU4FLO.Optimization;
+using Google.OrTools.Sat;
 using EU4FLO.Localization;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace EU4FLO.Optimization;
 
 public sealed class OptimizationRequest
 {
@@ -22,180 +27,126 @@ public sealed class OptimizationResult
 
 public static class DominatingSetSolver
 {
-    public static OptimizationResult Solve(OptimizationRequest req)
+    public static OptimizationResult Solve(OptimizationRequest req, int timeLimitSeconds = 10)
     {
         var result = new OptimizationResult();
-        var solution = result.Forts;
-
-        var inGroup = new Dictionary<int, FortGroup>();
-        foreach (var g in req.Groups)
-            foreach (var p in g.Provinces)
-                if (!inGroup.ContainsKey(p)) inGroup[p] = g;
-
-        var covered = new HashSet<int>();
-
-        void ApplyNode(int pid)
+        try
         {
-            if (!solution.Add(pid)) return;
-            covered.Add(pid);
-            if (req.Adjacency.TryGetValue(pid, out var nbrs))
-                foreach (var n in nbrs) covered.Add(n);
-        }
+            var model = new CpModel();
 
-        bool IsAdjacencyAllowed(int pid)
-        {
-            if (req.Mode == AdjacencyMode.AnyAdjacent) return true;
-            if (!req.Adjacency.TryGetValue(pid, out var nbrs)) return true;
-            foreach (var n in nbrs)
+            // 1. Переменные: 1 если ставим форт, 0 если нет
+            var x = new Dictionary<int, BoolVar>();
+            foreach (var p in req.Candidates)
+                x[p] = model.NewBoolVar($"x_{p}");
+
+            // 2. Цель: минимизировать количество фортов, но отдавать предпочтение Preferred
+            // Мы умножаем количество фортов на 1000, чтобы 1 сэкономленный форт всегда был важнее, 
+            // чем любые бонусы за Preferred (которых не может быть больше 1000).
+            var objectiveTerms = x.Values.Select(v => (LinearExpr)v).ToList();
+            var objective = LinearExpr.Sum(objectiveTerms) * 1000;
+            
+            foreach (var p in req.Preferred)
             {
-                if (!solution.Contains(n)) continue;
-                if (req.Mode == AdjacencyMode.NoAdjacent) return false;
-                // Homebrew: разрешено, если хотя бы одна из пары — исключительная
-                if (req.Exceptions.Contains(pid) || req.Exceptions.Contains(n)) continue;
-                return false;
+                if (x.TryGetValue(p, out var pVar))
+                    objective -= pVar; // Вычитаем 1, если провинция Preferred выбрана
             }
-            return true;
-        }
+            model.Minimize(objective);
 
-        // Универсум
-        var universe = req.Universe.Count > 0
-            ? new HashSet<int>(req.Universe)
-            : new HashSet<int>(req.Candidates);
-
-        // Phase A: обязательные
-        foreach (var pid in req.Required)
-            if (req.Candidates.Contains(pid)) ApplyNode(pid);
-
-        // Phase B: жадное покрытие
-        var uncovered = new HashSet<int>(universe.Where(p => !covered.Contains(p)));
-        while (uncovered.Count > 0)
-        {
-            int best = -1, bestScore = 0;
-            bool bestPreferred = false, bestUnderfilled = false;
-
-            foreach (var c in req.Candidates)
+            // 3. Покрытие: каждая провинция из Universe должна иметь форт сама или у соседа
+            foreach (var u in req.Universe)
             {
-                if (solution.Contains(c)) continue;
-                if (!IsAdjacencyAllowed(c)) continue;
-
-                int score = uncovered.Contains(c) ? 1 : 0;
-                if (req.Adjacency.TryGetValue(c, out var nbrs))
-                    foreach (var n in nbrs)
-                        if (uncovered.Contains(n)) score++;
-
-                if (score == 0) continue;
-
-                bool pref = req.Preferred.Contains(c);
-                bool under = inGroup.TryGetValue(c, out var gg) &&
-                             CountGroup(solution, gg) < gg.MinForts;
-
-                bool better =
-                    best == -1 ||
-                    score > bestScore ||
-                    (score == bestScore && under && !bestUnderfilled) ||
-                    (score == bestScore && under == bestUnderfilled && pref && !bestPreferred);
-
-                if (better)
+                var terms = new List<LinearExpr>();
+                if (x.TryGetValue(u, out var uVar)) terms.Add(uVar);
+                
+                if (req.Adjacency.TryGetValue(u, out var nbrs))
                 {
-                    best = c; bestScore = score;
-                    bestPreferred = pref; bestUnderfilled = under;
+                    foreach (var v in nbrs)
+                        if (x.TryGetValue(v, out var vVar)) terms.Add(vVar);
+                }
+
+                if (terms.Count > 0)
+                    model.Add(LinearExpr.Sum(terms) >= 1);
+                else
+                {
+                    // Если провинцию невозможно покрыть (нет форта и все соседи запрещены)
+                    result.Warnings.Add(Loc.T("solver.warn.uncovered", 1));
+                    return result;
                 }
             }
 
-            if (best == -1)
+            // 4. Обязательные крепости
+            foreach (var p in req.Required)
             {
-                result.Warnings.Add(Loc.T("solver.warn.uncovered", uncovered.Count));
-                result.CoverageComplete = false;
-                break;
+                if (x.TryGetValue(p, out var pVar)) 
+                    model.Add(pVar == 1);
+                else
+                {
+                    result.Warnings.Add($"Required fort {p} is not in candidates (maybe water/wasteland or outside coverage).");
+                    return result;
+                }
             }
 
-            ApplyNode(best);
-            uncovered.RemoveWhere(p => covered.Contains(p));
-        }
-        if (uncovered.Count == 0) result.CoverageComplete = true;
-
-        // Phase C: групповые минимумы
-        foreach (var g in req.Groups)
-        {
-            while (CountGroup(solution, g) < g.MinForts)
+            // 5. Режимы соседства (NoAdjacent / Homebrew)
+            foreach (var kvp in req.Adjacency)
             {
-                int pick = -1;
-                bool pickPref = false;
-                foreach (var p in g.Provinces)
+                int u = kvp.Key;
+                if (!x.ContainsKey(u)) continue;
+                
+                foreach (var v in kvp.Value)
                 {
-                    if (!req.Candidates.Contains(p)) continue;
-                    if (solution.Contains(p)) continue;
-                    if (!IsAdjacencyAllowed(p)) continue;
-                    bool pref = req.Preferred.Contains(p);
-                    if (pick == -1 || (pref && !pickPref)) { pick = p; pickPref = pref; }
+                    if (u < v && x.ContainsKey(v)) // Проверяем каждую пару только один раз
+                    {
+                        if (req.Mode == AdjacencyMode.NoAdjacent)
+                        {
+                            model.Add(x[u] + x[v] <= 1);
+                        }
+                        else if (req.Mode == AdjacencyMode.Homebrew)
+                        {
+                            if (!req.Exceptions.Contains(u) && !req.Exceptions.Contains(v))
+                                model.Add(x[u] + x[v] <= 1);
+                        }
+                    }
                 }
-                if (pick == -1)
+            }
+
+            // 6. Групповые ограничения
+            foreach (var g in req.Groups)
+            {
+                var gTerms = g.Provinces.Where(p => x.ContainsKey(p)).Select(p => (LinearExpr)x[p]).ToList();
+                if (gTerms.Count < g.MinForts)
                 {
                     result.Warnings.Add(Loc.T("solver.warn.group_min", g.Name, g.MinForts));
-                    break;
+                    return result;
                 }
-                ApplyNode(pick);
+                model.Add(LinearExpr.Sum(gTerms) >= g.MinForts);
+            }
+
+            // 7. Запуск солвера
+            var solver = new CpSolver();
+            solver.StringParameters = $"max_time_in_seconds:{timeLimitSeconds} num_search_workers:8"; 
+            var status = solver.Solve(model);
+
+            if (status == CpSolverStatus.Optimal || status == CpSolverStatus.Feasible)
+            {
+                foreach (var p in req.Candidates)
+                    if (solver.Value(x[p]) == 1)
+                        result.Forts.Add(p);
+                
+                result.CoverageComplete = true;
+                
+                if (status == CpSolverStatus.Feasible)
+                    result.Warnings.Add("Solver reached time limit. The found solution might not be mathematically optimal.");
+            }
+            else
+            {
+                result.Warnings.Add($"Solver failed with status: {status}. The constraints might be impossible to satisfy.");
             }
         }
-
-        // Phase D: прунинг избыточных
-        int Degree(int pid) => req.Adjacency.TryGetValue(pid, out var s) ? s.Count : 0;
-        var sorted = solution.OrderByDescending(Degree).ToList();
-        foreach (var p in sorted)
+        catch (Exception ex)
         {
-            if (req.Required.Contains(p)) continue;
-            if (!solution.Contains(p)) continue;
-
-            solution.Remove(p);
-            bool ok = true;
-
-            foreach (var g in req.Groups)
-                if (g.Provinces.Contains(p) && CountGroup(solution, g) < g.MinForts)
-                { ok = false; break; }
-
-            if (ok)
-            {
-                var affected = new HashSet<int> { p };
-                if (req.Adjacency.TryGetValue(p, out var nbrs))
-                    foreach (var n in nbrs) affected.Add(n);
-
-                foreach (var u in affected)
-                {
-                    if (!universe.Contains(u)) continue;
-                    bool cov = solution.Contains(u) ||
-                               (req.Adjacency.TryGetValue(u, out var s) && s.Any(solution.Contains));
-                    if (!cov) { ok = false; break; }
-                }
-            }
-
-            if (!ok) solution.Add(p);
-        }
-
-        // После прунинга проверим группы и при необходимости добьём
-        foreach (var g in req.Groups)
-        {
-            while (CountGroup(solution, g) < g.MinForts)
-            {
-                int pick = -1;
-                foreach (var p in g.Provinces)
-                {
-                    if (!req.Candidates.Contains(p)) continue;
-                    if (solution.Contains(p)) continue;
-                    if (!IsAdjacencyAllowed(p)) continue;
-                    pick = p; break;
-                }
-                if (pick == -1) break;
-                ApplyNode(pick);
-            }
+            result.Warnings.Add($"Solver exception: {ex.Message}");
         }
 
         return result;
-    }
-
-    private static int CountGroup(HashSet<int> solution, FortGroup g)
-    {
-        int n = 0;
-        foreach (var p in g.Provinces) if (solution.Contains(p)) n++;
-        return n;
     }
 }

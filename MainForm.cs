@@ -393,10 +393,13 @@ public sealed class MainForm : Form
         var exceptions = SelectorParser.ParseIdList(cfg.ExcludedText);
         var groups     = SelectorParser.ParseGroups(cfg.GroupsText, out var groupErrors);
 
-        var candidates = _provinces
-            .Where(p => !_seaProvinces.Contains(p.Id) && !_wastelands.Contains(p.Id))
-            .Select(p => p.Id)
-            .ToHashSet();
+        // --- ИЗМЕНЕНИЕ: Ограничиваем кандидатов только покрываемыми + обязательными провинциями ---
+        var candidates = new HashSet<int>(coverage);
+        foreach (var reqPid in required)
+            candidates.Add(reqPid);
+
+        // Убираем воду и пустоши (на всякий случай, если их явно вписали в текст)
+        candidates.RemoveWhere(p => _seaProvinces.Contains(p) || _wastelands.Contains(p));
 
         var req = new OptimizationRequest
         {
@@ -407,7 +410,7 @@ public sealed class MainForm : Form
             Exceptions = exceptions,
             Groups = groups,
             Mode = cfg.Mode,
-            Candidates = candidates
+            Candidates = candidates // <-- Передаем ограниченный список
         };
 
         var result = DominatingSetSolver.Solve(req);
