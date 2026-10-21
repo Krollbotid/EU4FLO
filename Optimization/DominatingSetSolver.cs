@@ -40,19 +40,17 @@ public static class DominatingSetSolver
                 x[p] = model.NewBoolVar($"x_{p}");
 
             // 2. Цель: минимизировать количество фортов, но отдавать предпочтение Preferred
-            // Мы умножаем количество фортов на 1000, чтобы 1 сэкономленный форт всегда был важнее, 
-            // чем любые бонусы за Preferred (которых не может быть больше 1000).
             var objectiveTerms = x.Values.Select(v => (LinearExpr)v).ToList();
             var objective = LinearExpr.Sum(objectiveTerms) * 1000;
             
             foreach (var p in req.Preferred)
             {
                 if (x.TryGetValue(p, out var pVar))
-                    objective -= pVar; // Вычитаем 1, если провинция Preferred выбрана
+                    objective -= pVar; 
             }
             model.Minimize(objective);
 
-            // 3. Покрытие: каждая провинция из Universe должна иметь форт сама или у соседа
+            // 3. Покрытие
             foreach (var u in req.Universe)
             {
                 var terms = new List<LinearExpr>();
@@ -68,7 +66,6 @@ public static class DominatingSetSolver
                     model.Add(LinearExpr.Sum(terms) >= 1);
                 else
                 {
-                    // Если провинцию невозможно покрыть (нет форта и все соседи запрещены)
                     result.Warnings.Add(Loc.T("solver.warn.uncovered", 1));
                     return result;
                 }
@@ -81,12 +78,12 @@ public static class DominatingSetSolver
                     model.Add(pVar == 1);
                 else
                 {
-                    result.Warnings.Add($"Required fort {p} is not in candidates (maybe water/wasteland or outside coverage).");
+                    result.Warnings.Add(Loc.T("solver.warn.required_not_in_candidates", p));
                     return result;
                 }
             }
 
-            // 5. Режимы соседства (NoAdjacent / Homebrew)
+            // 5. Режимы соседства
             foreach (var kvp in req.Adjacency)
             {
                 int u = kvp.Key;
@@ -94,7 +91,7 @@ public static class DominatingSetSolver
                 
                 foreach (var v in kvp.Value)
                 {
-                    if (u < v && x.ContainsKey(v)) // Проверяем каждую пару только один раз
+                    if (u < v && x.ContainsKey(v))
                     {
                         if (req.Mode == AdjacencyMode.NoAdjacent)
                         {
@@ -135,16 +132,16 @@ public static class DominatingSetSolver
                 result.CoverageComplete = true;
                 
                 if (status == CpSolverStatus.Feasible)
-                    result.Warnings.Add("Solver reached time limit. The found solution might not be mathematically optimal.");
+                    result.Warnings.Add(Loc.T("solver.warn.time_limit"));
             }
             else
             {
-                result.Warnings.Add($"Solver failed with status: {status}. The constraints might be impossible to satisfy.");
+                result.Warnings.Add(Loc.T("solver.warn.failed", status));
             }
         }
         catch (Exception ex)
         {
-            result.Warnings.Add($"Solver exception: {ex.Message}");
+            result.Warnings.Add(Loc.T("solver.warn.exception", ex.Message));
         }
 
         return result;

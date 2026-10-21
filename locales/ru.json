@@ -55,14 +55,14 @@
 
   "opt.title": "Оптимизация покрытия крепостями",
   "opt.field.coverage": "Покрываемые провинции:",
-  "opt.field.coverage.hint": "province, Name_или_ID / area, Area_Name / region, Region_Name / superregion, Superregion_Name",
+  "opt.field.coverage.hint": "province, Name_или_ID / area, Area_Name / region, Region_Name / superregion, Superregion_Name (Один объект на строку)",
   "opt.field.required": "Обязательные крепости:",
   "opt.field.preferred": "Желательные крепости:",
   "opt.field.excluded": "Исключительные (homebrew):",
   "opt.field.groups": "Группы:",
   "opt.field.mode": "Режим соседства:",
-  "opt.hint.ids": "ID через запятую или пробел",
-  "opt.hint.groups": "Group_Name : p1, p2, ... : MinForts",
+  "opt.hint.ids": "ID через запятую, пробел или перенос строки",
+  "opt.hint.groups": "Group_Name : p1, p2, ... : MinForts (Одна группа на строку. Имя любое неповторяющееся)",
   "opt.mode.no_adjacent": "Запретить крепости в соседних провинциях",
   "opt.mode.homebrew": "Homebrew (разрешить только для исключительных)",
   "opt.mode.any": "Разрешить любые соседние крепости",
@@ -78,6 +78,7 @@
   "opt.config.filter": "JSON (*.json)|*.json|Все файлы (*.*)|*.*",
   "opt.msg.parse_errors": "Ошибки парсинга",
   "opt.msg.warnings": "Замечания",
+  "opt.msg.empty_coverage_warning": "Список покрываемых провинций пуст. Вы действительно хотите оптимизировать ВСЮ карту? Это может занять очень много времени и упереться в лимит солвера.",
   "opt.msg.complete": "Оптимизация завершена. Фортов: {0}.",
   "opt.msg.done": "Готово",
 
@@ -91,6 +92,10 @@
 
   "solver.warn.uncovered": "Не удалось покрыть {0} провинций при заданных ограничениях.",
   "solver.warn.group_min": "Группа '{0}' не может достичь минимума {1}.",
+  "solver.warn.required_not_in_candidates": "Обязательная крепость {0} отсутствует среди кандидатов (возможно, это вода, пустошь или она вне зоны покрытия).",
+  "solver.warn.time_limit": "Солвер достиг лимита времени. Найденное решение может быть не строго оптимальным.",
+  "solver.warn.failed": "Солвер завершился с ошибкой: {0}. Возможно, заданные ограничения невозможно выполнить.",
+  "solver.warn.exception": "Исключение в солвере: {0}",
 
   "parser.bad_line": "Плохая строка: {0}",
   "parser.unknown_province": "Неизвестная провинция: {0}",

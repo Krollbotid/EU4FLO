@@ -1,5 +1,6 @@
-namespace EU4FLO.Optimization;
 using EU4FLO.Localization;
+
+namespace EU4FLO.Optimization;
 
 public sealed class SelectorContext
 {
@@ -28,6 +29,8 @@ public static class SelectorParser
         errors = new();
         var result = new HashSet<int>();
 
+        if (string.IsNullOrWhiteSpace(text)) return result;
+
         foreach (var raw in text.Split('\n'))
         {
             var line = raw.Trim();
@@ -48,8 +51,7 @@ public static class SelectorParser
 
                 case "area" or "a":
                 {
-                    var area = ctx.Areas.FirstOrDefault(x =>
-                        x.Name.Equals(arg, StringComparison.OrdinalIgnoreCase));
+                    var area = ctx.Areas.FirstOrDefault(x => MatchName(x.Name, arg, "_area"));
                     if (area == null) { errors.Add(Loc.T("parser.unknown_area", arg)); break; }
                     foreach (var p in area.ProvinceIds) AddProvince(result, p, ctx);
                     break;
@@ -57,12 +59,11 @@ public static class SelectorParser
 
                 case "region" or "r":
                 {
-                    var region = ctx.Regions.FirstOrDefault(x =>
-                        x.Name.Equals(arg, StringComparison.OrdinalIgnoreCase));
+                    var region = ctx.Regions.FirstOrDefault(x => MatchName(x.Name, arg, "_region"));
                     if (region == null) { errors.Add(Loc.T("parser.unknown_region", arg)); break; }
                     foreach (var an in region.AreaNames)
                     {
-                        var a = ctx.Areas.FirstOrDefault(x => x.Name == an);
+                        var a = ctx.Areas.FirstOrDefault(x => x.Name.Equals(an, StringComparison.OrdinalIgnoreCase));
                         if (a == null) continue;
                         foreach (var p in a.ProvinceIds) AddProvince(result, p, ctx);
                     }
@@ -71,16 +72,15 @@ public static class SelectorParser
 
                 case "superregion" or "s":
                 {
-                    var sr = ctx.Superregions.FirstOrDefault(x =>
-                        x.Name.Equals(arg, StringComparison.OrdinalIgnoreCase));
+                    var sr = ctx.Superregions.FirstOrDefault(x => MatchName(x.Name, arg, "_superregion"));
                     if (sr == null) { errors.Add(Loc.T("parser.unknown_superregion", arg)); break; }
                     foreach (var rn in sr.RegionNames)
                     {
-                        var r = ctx.Regions.FirstOrDefault(x => x.Name == rn);
+                        var r = ctx.Regions.FirstOrDefault(x => x.Name.Equals(rn, StringComparison.OrdinalIgnoreCase));
                         if (r == null) continue;
                         foreach (var an in r.AreaNames)
                         {
-                            var a = ctx.Areas.FirstOrDefault(x => x.Name == an);
+                            var a = ctx.Areas.FirstOrDefault(x => x.Name.Equals(an, StringComparison.OrdinalIgnoreCase));
                             if (a == null) continue;
                             foreach (var p in a.ProvinceIds) AddProvince(result, p, ctx);
                         }
@@ -96,6 +96,22 @@ public static class SelectorParser
         return result;
     }
 
+    /// <summary>Сравнивает имена, игнорируя регистр и необязательный суффикс (например, "_area").</summary>
+    private static bool MatchName(string actual, string query, string suffix)
+    {
+        if (actual.Equals(query, StringComparison.OrdinalIgnoreCase)) return true;
+        
+        var actualBase = actual.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) 
+            ? actual.Substring(0, actual.Length - suffix.Length) 
+            : actual;
+            
+        var queryBase = query.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) 
+            ? query.Substring(0, query.Length - suffix.Length) 
+            : query;
+
+        return actualBase.Equals(queryBase, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void AddProvince(HashSet<int> target, int pid, SelectorContext ctx)
     {
         if (ctx.SeaProvinces.Contains(pid)) return;
@@ -107,6 +123,8 @@ public static class SelectorParser
     public static HashSet<int> ParseIdList(string text)
     {
         var result = new HashSet<int>();
+        if (string.IsNullOrWhiteSpace(text)) return result;
+
         foreach (var raw in text.Split(
             new[] { ',', ' ', '\n', '\r', '\t', ';' },
             StringSplitOptions.RemoveEmptyEntries))
@@ -121,6 +139,7 @@ public static class SelectorParser
     {
         errors = new();
         var result = new List<FortGroup>();
+        if (string.IsNullOrWhiteSpace(text)) return result;
 
         foreach (var raw in text.Split('\n'))
         {

@@ -77,7 +77,14 @@ public sealed class MainForm : Form
             RefreshMap();
         };
 
-        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 42 };
+        var top = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = true,
+            Padding = new Padding(4) // Небольшой отступ для красоты
+        };
         top.Controls.Add(_loadButton);
         top.Controls.Add(_modeLabel);
         top.Controls.Add(_modeBox);
@@ -383,22 +390,28 @@ public sealed class MainForm : Form
 
         var coverage = SelectorParser.ParseCoverage(cfg.CoverageText, ctx, out var covErrors);
         if (coverage.Count == 0)
+        {
+            var msg = Loc.T("opt.msg.empty_coverage_warning");
+            var res = MessageBox.Show(msg, Loc.T("opt.msg.warnings"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+            if (res == DialogResult.No)
+                return;
+
             coverage = _provinces
                 .Where(p => !_seaProvinces.Contains(p.Id) && !_wastelands.Contains(p.Id))
                 .Select(p => p.Id)
                 .ToHashSet();
+        }
 
         var required   = SelectorParser.ParseIdList(cfg.RequiredText);
         var preferred  = SelectorParser.ParseIdList(cfg.PreferredText);
         var exceptions = SelectorParser.ParseIdList(cfg.ExcludedText);
         var groups     = SelectorParser.ParseGroups(cfg.GroupsText, out var groupErrors);
 
-        // --- ИЗМЕНЕНИЕ: Ограничиваем кандидатов только покрываемыми + обязательными провинциями ---
         var candidates = new HashSet<int>(coverage);
         foreach (var reqPid in required)
             candidates.Add(reqPid);
 
-        // Убираем воду и пустоши (на всякий случай, если их явно вписали в текст)
         candidates.RemoveWhere(p => _seaProvinces.Contains(p) || _wastelands.Contains(p));
 
         var req = new OptimizationRequest
@@ -410,7 +423,7 @@ public sealed class MainForm : Form
             Exceptions = exceptions,
             Groups = groups,
             Mode = cfg.Mode,
-            Candidates = candidates // <-- Передаем ограниченный список
+            Candidates = candidates
         };
 
         var result = DominatingSetSolver.Solve(req);
@@ -599,7 +612,6 @@ public sealed class MainForm : Form
             }
         }
 
-        // "Оптимизация" — всегда индекс 5 (текст локализован, искать по имени нельзя).
         const int optIdx = 5;
         if (_modeBox.SelectedIndex != optIdx)
             _modeBox.SelectedIndex = optIdx;

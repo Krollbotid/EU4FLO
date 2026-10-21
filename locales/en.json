@@ -55,14 +55,14 @@
 
   "opt.title": "Fort Coverage Optimization",
   "opt.field.coverage": "Coverage provinces:",
-  "opt.field.coverage.hint": "province, Name_or_ID / area, Area_Name / region, Region_Name / superregion, Superregion_Name",
+  "opt.field.coverage.hint": "province, Name_or_ID / area, Area_Name / region, Region_Name / superregion, Superregion_Name (one per line)",
   "opt.field.required": "Required forts:",
   "opt.field.preferred": "Preferred forts:",
   "opt.field.excluded": "Exceptional (homebrew):",
   "opt.field.groups": "Groups:",
   "opt.field.mode": "Adjacency mode:",
-  "opt.hint.ids": "IDs separated by comma or space",
-  "opt.hint.groups": "Group_Name : p1, p2, ... : MinForts",
+  "opt.hint.ids": "IDs separated by comma, space, or newline",
+  "opt.hint.groups": "Group_Name : p1, p2, ... : MinForts (One per line. Namy can be any as long as they don't repeat)",
   "opt.mode.no_adjacent": "Forbid forts in adjacent provinces",
   "opt.mode.homebrew": "Homebrew (allow only for exceptional provinces)",
   "opt.mode.any": "Allow any adjacent forts",
@@ -78,6 +78,7 @@
   "opt.config.filter": "JSON (*.json)|*.json|All files (*.*)|*.*",
   "opt.msg.parse_errors": "Parsing errors",
   "opt.msg.warnings": "Warnings",
+  "opt.msg.empty_coverage_warning": "The coverage list is empty. Do you want to optimize the ENTIRE map? This may take a very long time and hit the solver's time limit.",
   "opt.msg.complete": "Optimization complete. Forts: {0}.",
   "opt.msg.done": "Done",
 
@@ -91,6 +92,10 @@
 
   "solver.warn.uncovered": "Could not cover {0} provinces with the given constraints.",
   "solver.warn.group_min": "Group '{0}' cannot reach minimum {1}.",
+  "solver.warn.required_not_in_candidates": "Required fort {0} is not in candidates (maybe it's water, wasteland, or outside coverage).",
+  "solver.warn.time_limit": "Solver reached time limit. The found solution might not be mathematically optimal.",
+  "solver.warn.failed": "Solver failed with status: {0}. The constraints might be impossible to satisfy.",
+  "solver.warn.exception": "Solver exception: {0}",
 
   "parser.bad_line": "Bad line: {0}",
   "parser.unknown_province": "Unknown province: {0}",

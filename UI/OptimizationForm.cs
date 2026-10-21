@@ -243,7 +243,11 @@ public sealed class OptimizationForm : Form
     public void AppendCoverage(int pid)
     {
         var text = _coverageBox.Text ?? "";
-        if (text.Length > 0 && !text.EndsWith("\n")) text += "\n";
+        // Используем Environment.NewLine (\r\n), чтобы TextBox корректно отобразил перенос
+        if (text.Length > 0 && !text.EndsWith(Environment.NewLine))
+        {
+            text += Environment.NewLine;
+        }
         text += $"province, {pid}";
         _coverageBox.Text = text;
         _coverageBox.SelectionStart = _coverageBox.TextLength;
