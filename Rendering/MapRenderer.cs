@@ -1,6 +1,8 @@
 // Rendering/MapRenderer.cs
 using System.Drawing;
 using System.Drawing.Imaging;
+using EU4FLO.Localization;
+using System.Linq;
 
 public sealed class MapRenderer
 {
@@ -17,25 +19,27 @@ public sealed class MapRenderer
         _height = bmp.Height;
         _provincePixels = new uint[_width * _height];
         _colorToProvinceId = new Dictionary<uint, int>();
+        
         foreach (var p in provinces)
         {
-            // Если такой цвет уже есть — пропускаем дубликат.
-            // Для отладки можно добавить: Console.WriteLine($"Duplicate color {p.Packed}: ID {p.Id} conflicts with {_colorToProvinceId[p.Packed]}");
             if (!_colorToProvinceId.ContainsKey(p.Packed))
             {
                 _colorToProvinceId[p.Packed] = p.Id;
             }
         }
-        var duplicates = provinces
+
+        // Собираем все дубликаты в один список
+        var duplicateLines = provinces
             .GroupBy(p => p.Packed)
             .Where(g => g.Count() > 1)
-            .Select(g => new { Color = g.Key, Ids = g.Select(p => p.Id).ToList() })
+            .Select(g => $"{g.Key} -> IDs: {string.Join(", ", g.Select(p => p.Id))}")
             .ToList();
 
-        foreach (var dup in duplicates)
+        // Показываем одно сообщение, если есть дубликаты
+        if (duplicateLines.Count > 0)
         {
-            // Здесь можно вывести предупреждение или записать в лог
-            MessageBox.Show($"Дублирующийся цвет {dup.Color} у провинций: {string.Join(", ", dup.Ids)}");
+            string msg = Loc.T("map.warn_duplicate_colors", string.Join("\n", duplicateLines));
+            MessageBox.Show(msg, Loc.T("app.error"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         var rect = new Rectangle(0, 0, _width, _height);

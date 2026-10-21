@@ -389,8 +389,18 @@ public sealed class MainForm : Form
         var ctx = BuildSelectorContext();
 
         var coverage = SelectorParser.ParseCoverage(cfg.CoverageText, ctx, out var covErrors);
-        if (coverage.Count == 0)
+
+        // --- ИЗМЕНЕНИЕ: Сначала проверяем, есть ли ошибки парсинга ---
+        if (covErrors.Count > 0)
         {
+            MessageBox.Show(string.Join("\n", covErrors), Loc.T("opt.msg.parse_errors"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return; // Прерываем оптимизацию
+        }
+
+        // --- ИЗМЕНЕНИЕ: Теперь проверяем на пустоту ---
+        if (string.IsNullOrWhiteSpace(cfg.CoverageText))
+        {
+            // Поле ввода действительно пустое, спрашиваем про всю карту
             var msg = Loc.T("opt.msg.empty_coverage_warning");
             var res = MessageBox.Show(msg, Loc.T("opt.msg.warnings"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
@@ -402,11 +412,23 @@ public sealed class MainForm : Form
                 .Select(p => p.Id)
                 .ToHashSet();
         }
+        else if (coverage.Count == 0)
+        {
+            // Пользователь что-то ввёл, ошибок нет, но провинций не нашлось (например, только вода)
+            MessageBox.Show(Loc.T("opt.msg.no_valid_coverage"), Loc.T("opt.msg.warnings"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
 
         var required   = SelectorParser.ParseIdList(cfg.RequiredText);
         var preferred  = SelectorParser.ParseIdList(cfg.PreferredText);
         var exceptions = SelectorParser.ParseIdList(cfg.ExcludedText);
         var groups     = SelectorParser.ParseGroups(cfg.GroupsText, out var groupErrors);
+
+        if (groupErrors.Count > 0)
+        {
+            MessageBox.Show(string.Join("\n", groupErrors), Loc.T("opt.msg.parse_errors"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
 
         var candidates = new HashSet<int>(coverage);
         foreach (var reqPid in required)

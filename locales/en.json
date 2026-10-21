@@ -106,5 +106,7 @@
   "parser.bad_group": "Bad group: {0}",
   "parser.bad_group_min": "Bad minimum in group: {0}",
 
-  "msg.load_first": "Load the map first."
+  "msg.load_first": "Load the map first.",
+  "map.warn_duplicate_colors": "Multiple provinces share the same color. The first one will be used. Duplicates:\n{0}",
+  "opt.msg.no_valid_coverage": "Your coverage input did not result in any valid provinces to optimize (perhaps you only selected water/wasteland)."
 }
